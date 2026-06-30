@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>¡Alcanza a Richard! - Juego 8-bits</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  body {
+    min-height: 100vh;
+    background: #1a1a2e;
+    background-image: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    font-family: 'Courier New', monospace;
+    color: #fff;
+    padding: 8px 8px 14px 8px;
+    touch-action: none;
+  }
+  h1 {
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-shadow: 2px 2px 0 #e94560;
+    margin: 4px 0 2px 0;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 10px;
+    color: #9aa0c3;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  #gameWrap {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 9 / 16;
+    border: 5px solid #0f3460;
+    box-shadow: 0 0 0 3px #e94560, 0 10px 26px rgba(0,0,0,0.6);
+    background: #000;
+    touch-action: none;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    touch-action: none;
+  }
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    font-size: 12px;
+    text-shadow: 2px 2px 0 #000;
+    pointer-events: none;
+  }
+  #gapBarWrap {
+    position: absolute;
+    top: 26px; left: 8px; right: 8px;
+    height: 6px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.4);
+    pointer-events: none;
+  }
+  #gapBar {
+    height: 100%;
+    width: 30%;
+    background: #ffd23f;
+    transition: width 0.08s linear;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,20,0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px;
+  }
+  #overlay h2 { font-size: 16px; color: #e94560; text-shadow: 2px 2px 0 #000; margin-bottom: 8px; }
+  #overlay p { font-size: 11px; color: #ddd; line-height: 1.6; max-width: 280px; }
+  button#startBtn, button#restartBtn {
+    margin-top: 14px;
+    background: #e94560;
+    color: #fff;
+    border: 3px solid #fff;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 #0f3460;
+  }
+  button#startBtn:active, button#restartBtn:active {
+    transform: translate(2px,2px);
+    box-shadow: 2px 2px 0 #0f3460;
+  }
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 14px;
+    width: 100%;
+    max-width: 380px;
+    justify-content: center;
+  }
+  .ctrlBtn {
+    flex: 1;
+    max-width: 150px;
+    height: 56px;
+    background: #0f3460;
+    border: 3px solid #e94560;
+    color: #fff;
+    font-size: 22px;
+    border-radius: 10px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ctrlBtn:active { background: #e94560; }
+  #footerNote {
+    font-size: 9px;
+    color: #6b7099;
+    margin-top: 8px;
+    text-align: center;
+    max-width: 380px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🐾 ¡ALCANZA A RICHARD! 🐾</h1>
+<div class="subtitle">Lara persigue a su caniche escurridizo — estilo 8-bits</div>
+
+<div id="gameWrap">
+  <canvas id="game" width="360" height="640"></canvas>
+  <div id="hud">
+    <div id="catches">🐾 0 / 5</div>
+    <div id="timer">⏱ 60</div>
+  </div>
+  <div id="gapBarWrap"><div id="gapBar"></div></div>
+  <div id="overlay">
+    <h2>¡ALCANZA A RICHARD!</h2>
+    <p>
+      Richard corre delante de Lara por el camino del parque.<br><br>
+      Desliza el dedo o usa ◀ ▶ para moverte a los lados y esquivar bancos,
+      arbustos, charcos y otros perros paseando.<br><br>
+      Cuando Richard se pare a olfatear, ¡acércate y atrápalo! Necesitas 5 capturas antes de que se acabe el tiempo.
+    </p>
+    <button id="startBtn">▶ JUGAR</button>
+  </div>
+</div>
+
+<div id="controls">
+  <div class="ctrlBtn" id="btnLeft">◀</div>
+  <div class="ctrlBtn" id="btnRight">▶</div>
+</div>
+
+<div id="footerNote">Desliza el dedo sobre el camino para moverte · pulsa R para reiniciar.</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const CW = canvas.width, CH = canvas.height; // resolución interna fija
+const PIXEL = 3; // escala base de cada "pixel" de sprite
+
+const PATH_LEFT = 56;
+const PATH_RIGHT = CW - 56;
+const PATH_W = PATH_RIGHT - PATH_LEFT;
+const LARA_SCREEN_Y = CH * 0.74;
+
+// ---------- PALETAS Y SPRITES (pixel art en texto) ----------
+const laraColors = {
+  '.': null,
+  'H': '#2e1f14',
+  'h': '#4a3220',
+  'S': '#f0c39b',
+  's': '#d9a87a',
+  'G': '#3e2a4a',
+  'L': '#dff5ff',
+  'B': '#e7e1d3',
+  'b': '#cdc6b6',
+  'P': '#3a3a3a',
+  'p': '#262626',
+  'F': '#161616',
+  'O': '#c97a7a'
+};
+
+const LARA_FRAME_STAND = [
+"......HHHH......",
+".....HHHHHH.....",
+"....HHHHHHHH....",
+"...HHHHHHHHHH...",
+"..HHHHHHHHHHHH..",
+".HHSSSSSSSSSHH..",
+".HGGGGGGGGGGHh..",
+".HGGLLLLLLLGHh..",
+".HSSSsOOsSSSH...",
+".HSSSSSSSSSSH...",
+"..HSSSSSSSSH....",
+"...HHBBBBHH.....",
+"..HBBBBBBBBH....",
+"..BBBBBBBBBB....",
+"..BBBBBBBBBB....",
+"..BBbbbbbbBB....",
+"...PPP..PPP.....",
+"...PPP..PPP.....",
+"...PPp..pPP.....",
+"...FFF..FFF....."
+];
+
+const LARA_FRAME_WALK1 = LARA_FRAME_STAND.map((row,i)=>{
+  if (i===16) return "..PPP....PPP...";
+  if (i===17) return ".PPP......PPP..";
+  if (i===18) return ".PPp......pPP..";
+  if (i===19) return ".FFF......FFF..";
+  return row;
+});
+
+const LARA_FRAME_WALK2 = LARA_FRAME_STAND.map((row,i)=>{
+  if (i===16) return "...PPP..PPP....";
+  if (i===17) return "....PPP....PPP.";
+  if (i===18) return "....PPp....pPP.";
+  if (i===19) return "....FFF....FFF.";
+  return row;
+});
+
+const richardColors = {
+  '.': null,
+  'W': '#f4efe2',
+  'w': '#d9d0b8',
+  'N': '#1a1a1a',
+  'T': '#2f8f8f',
+  'Y': '#e8c84a'
+};
+
+// perros de otros paseantes (colores distintos para diferenciarlos de Richard)
+const npcDogColorsBrown = { '.': null, 'W': '#9a6a3a', 'w': '#7a4f28', 'N': '#161616', 'T': '#883333', 'Y': '#d9b54a' };
+const npcDogColorsBlack = { '.': null, 'W': '#3a3a3a', 'w': '#222222', 'N': '#000000', 'T': '#4a4a8a', 'Y': '#cccccc' };
+const npcPalettes = [npcDogColorsBrown, npcDogColorsBlack];
+
+const RICHARD_FRAME_STAND = [
+"....WWWWWWWW....",
+"...WWWWWWWWWW...",
+"..WWWWWWWWWWWW..",
+".WWWwWWWWWwWWW..",
+".WWNWWWWWWNWWW..",
+".WWWWWWNWWWWWW..",
+"..WWWWwwWWWWW...",
+"...WWTTTTWW.....",
+"...WTTYYTTW.....",
+"...WWWWWWWW.....",
+"...WW....WW.....",
+"...WW....WW....."
+];
+
+const RICHARD_FRAME_RUN1 = RICHARD_FRAME_STAND.map((row,i)=>{
+  if (i===10) return "..WWW....WW.....";
+  if (i===11) return "....W....WWW....";
+  return row;
+});
+
+const RICHARD_FRAME_RUN2 = RICHARD_FRAME_STAND.map((row,i)=>{
+  if (i===10) return "....W....WWW....";
+  if (i===11) return "..WWW....WW.....";
+  return row;
+});
+
+const RICHARD_FRAME_SNIFF = RICHARD_FRAME_STAND.map((row,i)=>{
+  if (i===0) return "................";
+  if (i===1) return "....WWWWWWWW....";
+  if (i===2) return "...WWWWWWWWWW...";
+  if (i===3) return "..WWWwWWWWWwWWW.";
+  if (i===4) return "..WWNWWWWWWNWWW.";
+  if (i===5) return "..WWWWWWNWWWWWW.";
+  return row;
+});
+
+function drawSpriteRaw(frame, colors, x, y, scale, flip, forceColor) {
+  const rows = frame.length;
+  const cols = frame[0].length;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = frame[r][c];
+      const color = colors[ch];
+      if (!color) continue;
+      const cx = flip ? (cols - 1 - c) : c;
+      ctx.fillStyle = forceColor || color;
+      ctx.fillRect(Math.round(x + cx * scale), Math.round(y + r * scale), Math.ceil(scale), Math.ceil(scale));
+    }
+  }
+  return { w: cols * scale, h: rows * scale };
+}
+
+function drawSprite(frame, colors, x, y, scale, flip, outlineColor) {
+  if (outlineColor) {
+    const off = Math.max(1, scale*0.6);
+    const offs = [[-off,0],[off,0],[0,-off],[0,off]];
+    for (const [dx,dy] of offs) {
+      drawSpriteRaw(frame, colors, x+dx, y+dy, scale, flip, outlineColor);
+    }
+  }
+  return drawSpriteRaw(frame, colors, x, y, scale, flip, null);
+}
+
+function spriteCenterOffset(frame, scale) {
+  return { w: frame[0].length*scale, h: frame.length*scale };
+}
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+// profundidad: los objetos lejos del jugador (arriba) se ven más pequeños
+function depthScale(screenY) {
+  const t = Math.max(0, Math.min(1, screenY / CH));
+  return 0.5 + t * 0.85;
+}
+
+// ---------- MUNDO (desplazamiento vertical) ----------
+const TOTAL_TIME = 60; // segundos
+const SCROLL_SPEED = 0.115; // unidades de mundo por ms (velocidad base de avance)
+const WORLD_LENGTH = SCROLL_SPEED * TOTAL_TIME * 1000 + 600;
+
+// obstáculos y perros NPC a lo largo del camino
+let obstacles = [];
+function genObstacles() {
+  obstacles = [];
+  let y = 260;
+  const types = ['bench','bush','puddle','cone','dog'];
+  while (y < WORLD_LENGTH - 150) {
+    const t = types[Math.floor(rand(0, types.length))];
+    let w = 34;
+    if (t === 'bench') w = 70;
+    else if (t === 'bush') w = 46;
+    else if (t === 'puddle') w = 56;
+    else if (t === 'cone') w = 30;
+    else if (t === 'dog') w = 42;
+    const x = rand(PATH_LEFT + w/2 + 6, PATH_RIGHT - w/2 - 6);
+    obstacles.push({
+      type: t, worldY: y, x, baseX: x, w,
+      checked: false,
+      palette: npcPalettes[Math.floor(rand(0,npcPalettes.length))],
+      phase: rand(0, Math.PI*2),
+      amp: rand(26, 46),
+      freq: rand(0.0012, 0.0022),
+      frame: Math.random() < 0.5 ? 1 : 2
+    });
+    y += rand(150, 260);
+  }
+}
+
+function drawObstacle(o, sx, sy, scale) {
+  if (o.type === 'bench') {
+    const w = o.w*scale, h = 16*scale;
+    ctx.fillStyle = '#8a5a2b';
+    ctx.fillRect(sx-w/2, sy-h/2, w, h*0.5);
+    ctx.fillStyle = '#6b4420';
+    ctx.fillRect(sx-w/2+3*scale, sy, 4*scale, h*0.6);
+    ctx.fillRect(sx+w/2-7*scale, sy, 4*scale, h*0.6);
+  } else if (o.type === 'bush') {
+    const r = o.w*scale*0.5;
+    ctx.fillStyle = '#2f6b3a';
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3f8a4d';
+    ctx.beginPath(); ctx.arc(sx-r*0.3, sy-r*0.3, r*0.55, 0, Math.PI*2); ctx.fill();
+  } else if (o.type === 'puddle') {
+    const w = o.w*scale, h = 9*scale;
+    ctx.fillStyle = '#7fb8d6';
+    ctx.beginPath(); ctx.ellipse(sx, sy, w/2, h/2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#a7d4ec';
+    ctx.beginPath(); ctx.ellipse(sx-w*0.15, sy-h*0.1, w*0.28, h*0.28, 0, 0, Math.PI*2); ctx.fill();
+  } else if (o.type === 'cone') {
+    const w = o.w*scale, h = 26*scale;
+    ctx.fillStyle = '#e0631f';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy-h/2);
+    ctx.lineTo(sx-w/2, sy+h/2);
+    ctx.lineTo(sx+w/2, sy+h/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(sx-w*0.3, sy, w*0.6, 3*scale);
+  }
+}
+
+// ---------- ESTADO ----------
+let camY = 0; // distancia recorrida por Lara (mundo)
+let staggerTimer = 0; // penalización tras chocar
+let keys = {};
+let pointerActive = false;
+let pointerTargetX = null;
+let timeLeft = TOTAL_TIME;
+let catches = 0;
+let gameState = 'menu';
+let lastTime = 0;
+let glassesOffTimer = 0;
+let screenFlashTimer = 0;
+let screenFlashColor = '#ffffff';
+let screenFlashDuration = 450;
+let hitFlashTimer = 0;
+let elapsed = 0;
+
+const lara = {
+  x: CW/2, w: 17*PIXEL, speed: 0.34,
+  facing: 1, frame: 0, animTimer: 0
+};
+
+const richard = {
+  worldY: 230, x: CW/2, w: 16*PIXEL,
+  state: 'run', stateTimer: rand(900,1800), caughtCooldown: 0,
+  frame: 1, animTimer: 0, vx: rand(-0.05,0.05)
+};
+
+function resetGame() {
+  camY = 0; timeLeft = TOTAL_TIME; catches = 0; staggerTimer = 0;
+  lara.x = CW/2; lara.frame = 0; lara.animTimer = 0;
+  richard.worldY = 230; richard.x = CW/2; richard.state = 'run';
+  richard.stateTimer = rand(900,1800); richard.caughtCooldown = 0; richard.vx = rand(-0.05,0.05);
+  glassesOffTimer = 0; screenFlashTimer = 0; hitFlashTimer = 0; elapsed = 0;
+  genObstacles();
+  document.getElementById('catches').textContent = `🐾 0 / 5`;
+  document.getElementById('timer').textContent = `⏱ ${TOTAL_TIME}`;
+  document.getElementById('gapBar').style.width = '30%';
+}
+
+// ---------- INPUT ----------
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'r' && (gameState==='won'||gameState==='lost')) {
+    startGame();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function canvasXFromClientX(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = CW / rect.width;
+  return (clientX - rect.left) * ratio;
+}
+
+function onPointerDown(clientX) {
+  pointerActive = true;
+  pointerTargetX = canvasXFromClientX(clientX);
+}
+function onPointerMove(clientX) {
+  if (!pointerActive) return;
+  pointerTargetX = canvasXFromClientX(clientX);
+}
+function onPointerUp() {
+  pointerActive = false;
+  pointerTargetX = null;
+}
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e.touches[0].clientX); }, {passive:false});
+canvas.addEventListener('touchmove', e => { e.preventDefault(); onPointerMove(e.touches[0].clientX); }, {passive:false});
+canvas.addEventListener('touchend', e => { e.preventDefault(); onPointerUp(); }, {passive:false});
+canvas.addEventListener('mousedown', e => onPointerDown(e.clientX));
+window.addEventListener('mousemove', e => onPointerMove(e.clientX));
+window.addEventListener('mouseup', onPointerUp);
+
+function bindHold(id, key) {
+  const el = document.getElementById(id);
+  const set = v => () => { keys[key] = v; };
+  el.addEventListener('touchstart', e => { e.preventDefault(); keys[key]=true; }, {passive:false});
+  el.addEventListener('touchend', e => { e.preventDefault(); keys[key]=false; }, {passive:false});
+  el.addEventListener('mousedown', set(true));
+  el.addEventListener('mouseup', set(false));
+  el.addEventListener('mouseleave', set(false));
+}
+bindHold('btnLeft','arrowleft');
+bindHold('btnRight','arrowright');
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+
+function startGame() {
+  resetGame();
+  gameState = 'playing';
+  document.getElementById('overlay').style.display = 'none';
+}
+
+// ---------- LOGICA ----------
+function updateLara(dt) {
+  let moving = false;
+  const turnMul = staggerTimer > 0 ? 0.35 : 1;
+
+  if (pointerActive && pointerTargetX !== null) {
+    const dx = pointerTargetX - lara.x;
+    lara.x += dx * Math.min(1, 0.22 * (dt/16) * turnMul);
+    if (Math.abs(dx) > 2) { lara.facing = dx > 0 ? 1 : -1; moving = true; }
+  } else {
+    if (keys['arrowleft'] || keys['a']) { lara.x -= lara.speed*turnMul*dt; lara.facing=-1; moving=true; }
+    if (keys['arrowright'] || keys['d']) { lara.x += lara.speed*turnMul*dt; lara.facing=1; moving=true; }
+  }
+
+  const halfW = lara.w/2;
+  lara.x = Math.max(PATH_LEFT + halfW*0.4, Math.min(PATH_RIGHT - halfW*0.4, lara.x));
+
+  if (moving) {
+    lara.animTimer += dt;
+    if (lara.animTimer > 110) { lara.animTimer = 0; lara.frame = lara.frame===1?2:1; }
+  } else {
+    lara.frame = 0;
+  }
+
+  if (glassesOffTimer > 0) glassesOffTimer -= dt;
+  if (hitFlashTimer > 0) hitFlashTimer -= dt;
+}
+
+function triggerHit() {
+  if (staggerTimer > 0) return;
+  staggerTimer = 550;
+  glassesOffTimer = 700;
+  hitFlashTimer = 220;
+}
+
+function updateScrollAndObstacles(dt) {
+  let speedMul = 1;
+  if (staggerTimer > 0) {
+    staggerTimer -= dt;
+    speedMul = 0.12;
+  }
+  camY += SCROLL_SPEED * speedMul * dt;
+
+  const larHalf = lara.w * 0.34;
+  for (const o of obstacles) {
+    const sy = LARA_SCREEN_Y - (o.worldY - camY);
+    if (o.type === 'dog') {
+      o.x = Math.max(PATH_LEFT+30, Math.min(PATH_RIGHT-30, o.baseX + Math.sin(elapsed*o.freq + o.phase) * o.amp));
+    }
+    if (!o.checked && camY >= o.worldY - 4) {
+      o.checked = true;
+      const oHalf = o.w/2;
+      const overlapX = Math.abs(o.x - lara.x) < (larHalf + oHalf*0.62);
+      if (overlapX) {
+        if (o.type === 'puddle') {
+          staggerTimer = Math.max(staggerTimer, 280);
+        } else {
+          triggerHit();
+        }
+      }
+    }
+  }
+}
+
+function updateRichard(dt) {
+  if (richard.caughtCooldown > 0) richard.caughtCooldown -= dt;
+  richard.stateTimer -= dt;
+
+  let speedFactor;
+  if (richard.state === 'run') speedFactor = 0.80 + Math.min(0.18, catches*0.03);
+  else if (richard.state === 'sniff') speedFactor = 0.05;
+  else speedFactor = 1.85; // sprint
+
+  richard.worldY += SCROLL_SPEED * speedFactor * dt;
+
+  if (richard.stateTimer <= 0) {
+    const r = Math.random();
+    if (richard.state === 'sniff') { richard.state='run'; richard.stateTimer = rand(700,1500); }
+    else if (r < 0.32) { richard.state = 'sniff'; richard.stateTimer = rand(500,1100); }
+    else if (r < 0.55) { richard.state = 'sprint'; richard.stateTimer = rand(450,800); }
+    else { richard.state = 'run'; richard.stateTimer = rand(700,1600); }
+  }
+
+  richard.x += Math.sin(elapsed*0.0016 + 1.4) * 0.06 * dt;
+  richard.x = Math.max(PATH_LEFT+30, Math.min(PATH_RIGHT-30, richard.x));
+
+  if (richard.state !== 'sniff') {
+    richard.animTimer += dt;
+    if (richard.animTimer > 100) { richard.animTimer = 0; richard.frame = richard.frame===1?2:1; }
+  }
+
+  const gap = richard.worldY - camY;
+  const gapPct = Math.max(0, Math.min(100, (1 - gap/260) * 100));
+  document.getElementById('gapBar').style.width = gapPct + '%';
+  document.getElementById('gapBar').style.background = gap < 30 ? '#5ee37a' : (gap < 100 ? '#ffd23f' : '#e94560');
+
+  if (richard.caughtCooldown <= 0 && gap < 20 && Math.abs(richard.x - lara.x) < (lara.w*0.34 + richard.w*0.34)) {
+    catches++;
+    document.getElementById('catches').textContent = `🐾 ${catches} / 5`;
+    richard.caughtCooldown = 1000;
+    richard.worldY = camY + rand(210, 280);
+    richard.state = 'sprint';
+    richard.stateTimer = 500;
+    screenFlashTimer = screenFlashDuration;
+    screenFlashColor = `hsl(${Math.floor(rand(0,360))}, 95%, 60%)`;
+    if (catches >= 5) {
+      gameState = 'won';
+      showOverlay(true);
+    }
+  }
+}
+
+// ---------- DIBUJO ----------
+function drawBackground() {
+  ctx.fillStyle = '#bfe6f5';
+  ctx.fillRect(0,0,CW,CH);
+
+  // césped a los lados
+  ctx.fillStyle = '#4ea84d';
+  ctx.fillRect(0,0,PATH_LEFT,CH);
+  ctx.fillRect(PATH_RIGHT,0,CW-PATH_RIGHT,CH);
+
+  // textura del césped (parallax simple ligado a camY)
+  ctx.fillStyle = '#3f8a3f';
+  const stripeOffset = (camY*0.6) % 28;
+  for (let y = -stripeOffset; y < CH; y += 28) {
+    ctx.fillRect(4, y, PATH_LEFT-10, 6);
+    ctx.fillRect(PATH_RIGHT+6, y, CW-PATH_RIGHT-10, 6);
+  }
+
+  // camino central
+  ctx.fillStyle = '#d8c39a';
+  ctx.fillRect(PATH_LEFT,0,PATH_W,CH);
+  ctx.fillStyle = '#c8b182';
+  ctx.fillRect(PATH_LEFT-3,0,3,CH);
+  ctx.fillRect(PATH_RIGHT,0,3,CH);
+
+  // línea central discontinua (sensación de movimiento)
+  ctx.fillStyle = '#fff7e0';
+  const dashOffset = (camY*1.2) % 40;
+  for (let y = -dashOffset; y < CH; y += 40) {
+    ctx.fillRect(CW/2-2, y, 4, 20);
+  }
+
+  // árboles decorativos en el césped (parallax)
+  ctx.fillStyle = '#2f6b3a';
+  const treeOffset = (camY*0.6) % 130;
+  for (let y = -treeOffset; y < CH; y += 130) {
+    ctx.beginPath(); ctx.arc(22, y+20, 14, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(CW-22, y+85, 14, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function draw() {
+  drawBackground();
+
+  // obstáculos y perros NPC (ordenados para que lo más cercano se dibuje encima)
+  const visible = obstacles
+    .map(o => ({ o, sy: LARA_SCREEN_Y - (o.worldY - camY) }))
+    .filter(v => v.sy > -50 && v.sy < CH+50)
+    .sort((a,b)=>a.sy-b.sy);
+
+  for (const { o, sy } of visible) {
+    const scale = depthScale(sy);
+    if (o.type === 'dog') {
+      const frame = o.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1;
+      const sc = PIXEL*scale*0.85;
+      const fw = frame[0].length*sc, fh = frame.length*sc;
+      ctx.fillStyle = 'rgba(20,30,20,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(o.x, sy+fh*0.42, fw*0.4, 5*scale, 0, 0, Math.PI*2);
+      ctx.fill();
+      drawSprite(frame, o.palette, o.x-fw/2, sy-fh/2, sc, o.x < lara.x, '#161616');
+    } else {
+      drawObstacle(o, o.x, sy, scale);
+    }
+  }
+
+  // Richard
+  const richardSy = LARA_SCREEN_Y - (richard.worldY - camY);
+  if (richardSy > -60 && richardSy < CH+60) {
+    const scale = depthScale(richardSy);
+    let rFrame = richard.state === 'sniff' ? RICHARD_FRAME_SNIFF : (richard.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1);
+    const sc = PIXEL*scale;
+    const fw = rFrame[0].length*sc, fh = rFrame.length*sc;
+    ctx.fillStyle = 'rgba(20,30,20,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(richard.x, richardSy+fh*0.42, fw*0.4, 6*scale, 0, 0, Math.PI*2);
+    ctx.fill();
+    drawSprite(rFrame, richardColors, richard.x-fw/2, richardSy-fh/2, sc, richard.x < lara.x, '#1f2a2a');
+  }
+
+  // Lara (siempre en primer plano, posición fija)
+  let lFrame = lara.frame===1 ? LARA_FRAME_WALK1 : (lara.frame===2 ? LARA_FRAME_WALK2 : LARA_FRAME_STAND);
+  const lw = lFrame[0].length*PIXEL, lh = lFrame.length*PIXEL;
+  ctx.fillStyle = 'rgba(20,30,20,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(lara.x, LARA_SCREEN_Y+lh*0.46, lw*0.36, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+  drawSprite(lFrame, laraColors, lara.x-lw/2, LARA_SCREEN_Y-lh/2, PIXEL, lara.facing===-1, '#1a1410');
+
+  // efecto: golpe / tropiezo
+  if (hitFlashTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.28 * (hitFlashTimer/220);
+    ctx.fillStyle = '#ff3b3b';
+    ctx.fillRect(0,0,CW,CH);
+    ctx.restore();
+  }
+
+  // efecto gafas caídas
+  if (glassesOffTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,CW,CH);
+    ctx.restore();
+    ctx.fillStyle = '#000';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('¡se le cayeron las gafas a Lara!', CW/2, LARA_SCREEN_Y-40);
+    ctx.textAlign = 'left';
+  }
+
+  // destello de color al atrapar a Richard
+  if (screenFlashTimer > 0) {
+    const t = screenFlashTimer / screenFlashDuration;
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.7, t * 0.7);
+    ctx.fillStyle = screenFlashColor;
+    ctx.fillRect(0, 0, CW, CH);
+    ctx.restore();
+  }
+}
+
+// ---------- LOOP ----------
+function showOverlay(won) {
+  const ov = document.getElementById('overlay');
+  ov.style.display = 'flex';
+  ov.innerHTML = won
+    ? `<h2>🎉 ¡LARA ATRAPÓ A RICHARD!</h2><p>Lo lograste en ${TOTAL_TIME-Math.ceil(timeLeft)} segundos. Richard mueve la cola, ¡misión cumplida!</p><button id="restartBtn">▶ JUGAR DE NUEVO</button>`
+    : `<h2>⏰ ¡SE TE ACABÓ EL TIEMPO!</h2><p>Richard sigue suelto por el parque. Atrapaste ${catches} de 5 veces. ¡Inténtalo otra vez!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  document.getElementById('restartBtn').addEventListener('click', startGame);
+}
+
+function loop(ts) {
+  const dt = Math.min(40, ts - lastTime || 16);
+  lastTime = ts;
+  if (screenFlashTimer > 0) screenFlashTimer = Math.max(0, screenFlashTimer - dt);
+
+  if (gameState === 'playing') {
+    elapsed += dt;
+    timeLeft -= dt/1000;
+    document.getElementById('timer').textContent = `⏱ ${Math.max(0,Math.ceil(timeLeft))}`;
+    if (timeLeft <= 0) {
+      gameState = 'lost';
+      showOverlay(false);
+    }
+    updateLara(dt);
+    updateScrollAndObstacles(dt);
+    updateRichard(dt);
+    draw();
+  } else {
+    draw();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+genObstacles();
+draw();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
