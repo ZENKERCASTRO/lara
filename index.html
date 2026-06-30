@@ -133,6 +133,17 @@
     justify-content: center;
   }
   .ctrlBtn:active { background: #e94560; }
+  #vBtns {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    max-width: 150px;
+  }
+  .ctrlBtn.small {
+    height: 25px;
+    max-width: none;
+  }
   #footerNote {
     font-size: 9px;
     color: #6b7099;
@@ -158,9 +169,11 @@
     <h2>¡ALCANZA A RICHARD!</h2>
     <p>
       Richard corre delante de Lara por el camino del parque.<br><br>
-      Desliza el dedo o usa ◀ ▶ para moverte a los lados y esquivar bancos,
-      arbustos, charcos y otros perros paseando.<br><br>
-      Cuando Richard se pare a olfatear, ¡acércate y atrápalo! Necesitas 5 capturas antes de que se acabe el tiempo.
+      Desliza el dedo: a los lados para esquivar, hacia arriba para acelerar
+      y hacia abajo para frenar. También puedes usar las flechas.<br><br>
+      Esquiva bancos, arbustos, charcos, otros perros... ¡y los coches, que
+      te pueden atropellar! Cuando Richard se pare a olfatear, acércate y
+      atrápalo. Necesitas 5 capturas antes de que se acabe el tiempo.
     </p>
     <button id="startBtn">▶ JUGAR</button>
   </div>
@@ -168,10 +181,14 @@
 
 <div id="controls">
   <div class="ctrlBtn" id="btnLeft">◀</div>
+  <div id="vBtns">
+    <div class="ctrlBtn small" id="btnUp">▲</div>
+    <div class="ctrlBtn small" id="btnDown">▼</div>
+  </div>
   <div class="ctrlBtn" id="btnRight">▶</div>
 </div>
 
-<div id="footerNote">Desliza el dedo sobre el camino para moverte · pulsa R para reiniciar.</div>
+<div id="footerNote">Desliza el dedo: lados = esquivar · arriba/abajo = acelerar/frenar · R = reiniciar.</div>
 
 <script>
 const canvas = document.getElementById('game');
@@ -255,6 +272,9 @@ const richardColors = {
 const npcDogColorsBrown = { '.': null, 'W': '#9a6a3a', 'w': '#7a4f28', 'N': '#161616', 'T': '#883333', 'Y': '#d9b54a' };
 const npcDogColorsBlack = { '.': null, 'W': '#3a3a3a', 'w': '#222222', 'N': '#000000', 'T': '#4a4a8a', 'Y': '#cccccc' };
 const npcPalettes = [npcDogColorsBrown, npcDogColorsBlack];
+
+// colores de coches que pasan por el camino
+const carColors = ['#e94560', '#2f7fd0', '#f2b134', '#3aa65c'];
 
 const RICHARD_FRAME_STAND = [
 "....WWWWWWWW....",
@@ -342,7 +362,7 @@ let obstacles = [];
 function genObstacles() {
   obstacles = [];
   let y = 260;
-  const types = ['bench','bush','puddle','cone','dog'];
+  const types = ['bench','bush','puddle','cone','dog','dog','car'];
   while (y < WORLD_LENGTH - 150) {
     const t = types[Math.floor(rand(0, types.length))];
     let w = 34;
@@ -351,17 +371,19 @@ function genObstacles() {
     else if (t === 'puddle') w = 56;
     else if (t === 'cone') w = 30;
     else if (t === 'dog') w = 42;
+    else if (t === 'car') w = 50;
     const x = rand(PATH_LEFT + w/2 + 6, PATH_RIGHT - w/2 - 6);
     obstacles.push({
       type: t, worldY: y, x, baseX: x, w,
       checked: false,
       palette: npcPalettes[Math.floor(rand(0,npcPalettes.length))],
+      carColor: carColors[Math.floor(rand(0,carColors.length))],
       phase: rand(0, Math.PI*2),
-      amp: rand(26, 46),
-      freq: rand(0.0012, 0.0022),
+      amp: t==='car' ? rand(14, 26) : rand(26, 46),
+      freq: t==='car' ? rand(0.0018, 0.0028) : rand(0.0012, 0.0022),
       frame: Math.random() < 0.5 ? 1 : 2
     });
-    y += rand(150, 260);
+    y += t === 'car' ? rand(190, 300) : rand(150, 260);
   }
 }
 
@@ -396,7 +418,38 @@ function drawObstacle(o, sx, sy, scale) {
     ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.fillRect(sx-w*0.3, sy, w*0.6, 3*scale);
+  } else if (o.type === 'car') {
+    drawCar(sx, sy, scale, o.carColor);
   }
+}
+
+function drawCar(sx, sy, scale, color) {
+  const w = 30*scale, h = 50*scale;
+  // sombra de contacto
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy+h*0.46, w*0.58, h*0.16, 0, 0, Math.PI*2);
+  ctx.fill();
+  // carrocería
+  ctx.fillStyle = color;
+  ctx.fillRect(sx-w/2, sy-h/2, w, h);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(sx-w/2, sy-h/2, w*0.22, h);
+  ctx.fillRect(sx+w/2-w*0.22, sy-h/2, w*0.22, h);
+  // parabrisas delantero y trasero
+  ctx.fillStyle = '#9fd8f0';
+  ctx.fillRect(sx-w*0.32, sy-h*0.40, w*0.64, h*0.18);
+  ctx.fillRect(sx-w*0.32, sy+h*0.14, w*0.64, h*0.16);
+  // faros
+  ctx.fillStyle = '#fff7c2';
+  ctx.fillRect(sx-w*0.42, sy-h*0.49, w*0.18, h*0.06);
+  ctx.fillRect(sx+w*0.24, sy-h*0.49, w*0.18, h*0.06);
+  // ruedas
+  ctx.fillStyle = '#161616';
+  ctx.fillRect(sx-w*0.58, sy-h*0.30, w*0.13, h*0.20);
+  ctx.fillRect(sx+w*0.45, sy-h*0.30, w*0.13, h*0.20);
+  ctx.fillRect(sx-w*0.58, sy+h*0.08, w*0.13, h*0.20);
+  ctx.fillRect(sx+w*0.45, sy+h*0.08, w*0.13, h*0.20);
 }
 
 // ---------- ESTADO ----------
@@ -405,6 +458,9 @@ let staggerTimer = 0; // penalización tras chocar
 let keys = {};
 let pointerActive = false;
 let pointerTargetX = null;
+let pointerStartX = null, pointerStartY = null, laraStartX = null;
+let forwardInput = 0; // -1 (atrás/frenar) .. 1 (adelante/acelerar)
+const MAX_BOOST = 0.16; // unidades de mundo por ms extra al acelerar/frenar (permite ir hacia atrás)
 let timeLeft = TOTAL_TIME;
 let catches = 0;
 let gameState = 'menu';
@@ -414,7 +470,10 @@ let screenFlashTimer = 0;
 let screenFlashColor = '#ffffff';
 let screenFlashDuration = 450;
 let hitFlashTimer = 0;
+let shakeTimer = 0;
 let elapsed = 0;
+let carDeathTimer = 0;
+const CAR_DEATH_DURATION = 900;
 
 const lara = {
   x: CW/2, w: 17*PIXEL, speed: 0.34,
@@ -432,7 +491,7 @@ function resetGame() {
   lara.x = CW/2; lara.frame = 0; lara.animTimer = 0;
   richard.worldY = 230; richard.x = CW/2; richard.state = 'run';
   richard.stateTimer = rand(900,1800); richard.caughtCooldown = 0; richard.vx = rand(-0.05,0.05);
-  glassesOffTimer = 0; screenFlashTimer = 0; hitFlashTimer = 0; elapsed = 0;
+  glassesOffTimer = 0; screenFlashTimer = 0; hitFlashTimer = 0; shakeTimer = 0; elapsed = 0; forwardInput = 0; carDeathTimer = 0;
   genObstacles();
   document.getElementById('catches').textContent = `🐾 0 / 5`;
   document.getElementById('timer').textContent = `⏱ ${TOTAL_TIME}`;
@@ -453,25 +512,38 @@ function canvasXFromClientX(clientX) {
   const ratio = CW / rect.width;
   return (clientX - rect.left) * ratio;
 }
-
-function onPointerDown(clientX) {
-  pointerActive = true;
-  pointerTargetX = canvasXFromClientX(clientX);
+function canvasYFromClientY(clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const ratio = CH / rect.height;
+  return (clientY - rect.top) * ratio;
 }
-function onPointerMove(clientX) {
+
+function onPointerDown(clientX, clientY) {
+  pointerActive = true;
+  pointerStartX = canvasXFromClientX(clientX);
+  pointerStartY = canvasYFromClientY(clientY);
+  laraStartX = lara.x;
+  pointerTargetX = lara.x;
+}
+function onPointerMove(clientX, clientY) {
   if (!pointerActive) return;
-  pointerTargetX = canvasXFromClientX(clientX);
+  const curX = canvasXFromClientX(clientX);
+  const curY = canvasYFromClientY(clientY);
+  pointerTargetX = laraStartX + (curX - pointerStartX);
+  const dy = pointerStartY - curY; // arrastrar hacia arriba = acelerar
+  forwardInput = Math.max(-1, Math.min(1, dy / 90));
 }
 function onPointerUp() {
   pointerActive = false;
   pointerTargetX = null;
+  forwardInput = 0;
 }
 
-canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e.touches[0].clientX); }, {passive:false});
-canvas.addEventListener('touchmove', e => { e.preventDefault(); onPointerMove(e.touches[0].clientX); }, {passive:false});
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+canvas.addEventListener('touchmove', e => { e.preventDefault(); onPointerMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
 canvas.addEventListener('touchend', e => { e.preventDefault(); onPointerUp(); }, {passive:false});
-canvas.addEventListener('mousedown', e => onPointerDown(e.clientX));
-window.addEventListener('mousemove', e => onPointerMove(e.clientX));
+canvas.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY));
+window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
 window.addEventListener('mouseup', onPointerUp);
 
 function bindHold(id, key) {
@@ -485,6 +557,8 @@ function bindHold(id, key) {
 }
 bindHold('btnLeft','arrowleft');
 bindHold('btnRight','arrowright');
+bindHold('btnUp','arrowup');
+bindHold('btnDown','arrowdown');
 
 document.getElementById('startBtn').addEventListener('click', startGame);
 
@@ -506,6 +580,11 @@ function updateLara(dt) {
   } else {
     if (keys['arrowleft'] || keys['a']) { lara.x -= lara.speed*turnMul*dt; lara.facing=-1; moving=true; }
     if (keys['arrowright'] || keys['d']) { lara.x += lara.speed*turnMul*dt; lara.facing=1; moving=true; }
+
+    let kf = 0;
+    if (keys['arrowup'] || keys['w']) kf += 1;
+    if (keys['arrowdown'] || keys['s']) kf -= 1;
+    forwardInput = kf;
   }
 
   const halfW = lara.w/2;
@@ -520,6 +599,7 @@ function updateLara(dt) {
 
   if (glassesOffTimer > 0) glassesOffTimer -= dt;
   if (hitFlashTimer > 0) hitFlashTimer -= dt;
+  if (shakeTimer > 0) shakeTimer -= dt;
 }
 
 function triggerHit() {
@@ -529,18 +609,27 @@ function triggerHit() {
   hitFlashTimer = 220;
 }
 
+function triggerCarHit() {
+  if (gameState !== 'playing') return;
+  gameState = 'dead';
+  carDeathTimer = CAR_DEATH_DURATION;
+  hitFlashTimer = CAR_DEATH_DURATION;
+  shakeTimer = 500;
+}
+
 function updateScrollAndObstacles(dt) {
   let speedMul = 1;
   if (staggerTimer > 0) {
     staggerTimer -= dt;
     speedMul = 0.12;
   }
-  camY += SCROLL_SPEED * speedMul * dt;
+  const boosted = SCROLL_SPEED + forwardInput * MAX_BOOST;
+  camY = Math.max(0, camY + boosted * speedMul * dt);
 
   const larHalf = lara.w * 0.34;
   for (const o of obstacles) {
     const sy = LARA_SCREEN_Y - (o.worldY - camY);
-    if (o.type === 'dog') {
+    if (o.type === 'dog' || o.type === 'car') {
       o.x = Math.max(PATH_LEFT+30, Math.min(PATH_RIGHT-30, o.baseX + Math.sin(elapsed*o.freq + o.phase) * o.amp));
     }
     if (!o.checked && camY >= o.worldY - 4) {
@@ -550,6 +639,8 @@ function updateScrollAndObstacles(dt) {
       if (overlapX) {
         if (o.type === 'puddle') {
           staggerTimer = Math.max(staggerTimer, 280);
+        } else if (o.type === 'car') {
+          triggerCarHit();
         } else {
           triggerHit();
         }
@@ -647,7 +738,59 @@ function drawBackground() {
   }
 }
 
+function drawDeathCross(cx, cy, progress) {
+  // sombra en el suelo
+  ctx.fillStyle = 'rgba(20,20,20,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy+30, 26, 8, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  const pop = Math.min(1, progress*3.2);
+  const overshoot = pop < 1 ? pop : 1 + Math.sin(progress*Math.PI)*0.06;
+  const size = 24 * overshoot;
+
+  ctx.save();
+  ctx.translate(cx, cy - 6);
+  ctx.lineCap = 'round';
+
+  // cruz negra de fondo (contorno)
+  ctx.strokeStyle = '#1a1410';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(-size, -size); ctx.lineTo(size, size);
+  ctx.moveTo(size, -size); ctx.lineTo(-size, size);
+  ctx.stroke();
+
+  // cruz roja encima
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-size, -size); ctx.lineTo(size, size);
+  ctx.moveTo(size, -size); ctx.lineTo(-size, size);
+  ctx.stroke();
+  ctx.restore();
+
+  // texto
+  if (progress > 0.15) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (progress-0.15)*2.5);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('¡ATROPELLADA!', cx, cy - 46);
+    ctx.font = '16px monospace';
+    ctx.fillText('💥', cx, cy + 50);
+    ctx.restore();
+    ctx.textAlign = 'left';
+  }
+}
+
 function draw() {
+  ctx.save();
+  if (shakeTimer > 0) {
+    ctx.translate(rand(-5,5), rand(-4,4));
+  }
+
   drawBackground();
 
   // obstáculos y perros NPC (ordenados para que lo más cercano se dibuje encima)
@@ -686,19 +829,24 @@ function draw() {
     drawSprite(rFrame, richardColors, richard.x-fw/2, richardSy-fh/2, sc, richard.x < lara.x, '#1f2a2a');
   }
 
-  // Lara (siempre en primer plano, posición fija)
-  let lFrame = lara.frame===1 ? LARA_FRAME_WALK1 : (lara.frame===2 ? LARA_FRAME_WALK2 : LARA_FRAME_STAND);
-  const lw = lFrame[0].length*PIXEL, lh = lFrame.length*PIXEL;
-  ctx.fillStyle = 'rgba(20,30,20,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(lara.x, LARA_SCREEN_Y+lh*0.46, lw*0.36, 6, 0, 0, Math.PI*2);
-  ctx.fill();
-  drawSprite(lFrame, laraColors, lara.x-lw/2, LARA_SCREEN_Y-lh/2, PIXEL, lara.facing===-1, '#1a1410');
+  // Lara (siempre en primer plano, posición fija) — o la cruz si la atropellaron
+  if (gameState === 'dead') {
+    const progress = 1 - Math.max(0, carDeathTimer) / CAR_DEATH_DURATION;
+    drawDeathCross(lara.x, LARA_SCREEN_Y, progress);
+  } else {
+    let lFrame = lara.frame===1 ? LARA_FRAME_WALK1 : (lara.frame===2 ? LARA_FRAME_WALK2 : LARA_FRAME_STAND);
+    const lw = lFrame[0].length*PIXEL, lh = lFrame.length*PIXEL;
+    ctx.fillStyle = 'rgba(20,30,20,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(lara.x, LARA_SCREEN_Y+lh*0.46, lw*0.36, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+    drawSprite(lFrame, laraColors, lara.x-lw/2, LARA_SCREEN_Y-lh/2, PIXEL, lara.facing===-1, '#1a1410');
+  }
 
   // efecto: golpe / tropiezo
   if (hitFlashTimer > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.28 * (hitFlashTimer/220);
+    ctx.globalAlpha = 0.28 * Math.min(1, hitFlashTimer/220);
     ctx.fillStyle = '#ff3b3b';
     ctx.fillRect(0,0,CW,CH);
     ctx.restore();
@@ -727,15 +875,21 @@ function draw() {
     ctx.fillRect(0, 0, CW, CH);
     ctx.restore();
   }
+
+  ctx.restore();
 }
 
 // ---------- LOOP ----------
-function showOverlay(won) {
+function showOverlay(won, reason) {
   const ov = document.getElementById('overlay');
   ov.style.display = 'flex';
-  ov.innerHTML = won
-    ? `<h2>🎉 ¡LARA ATRAPÓ A RICHARD!</h2><p>Lo lograste en ${TOTAL_TIME-Math.ceil(timeLeft)} segundos. Richard mueve la cola, ¡misión cumplida!</p><button id="restartBtn">▶ JUGAR DE NUEVO</button>`
-    : `<h2>⏰ ¡SE TE ACABÓ EL TIEMPO!</h2><p>Richard sigue suelto por el parque. Atrapaste ${catches} de 5 veces. ¡Inténtalo otra vez!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  if (won) {
+    ov.innerHTML = `<h2>🎉 ¡LARA ATRAPÓ A RICHARD!</h2><p>Lo lograste en ${TOTAL_TIME-Math.ceil(timeLeft)} segundos. Richard mueve la cola, ¡misión cumplida!</p><button id="restartBtn">▶ JUGAR DE NUEVO</button>`;
+  } else if (reason === 'car') {
+    ov.innerHTML = `<h2>✝️ ¡UN COCHE ATROPELLÓ A LARA!</h2><p>No esquivó a tiempo... Atrapó a Richard ${catches} de 5 veces. ¡Inténtalo otra vez y ten cuidado con el tráfico!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  } else {
+    ov.innerHTML = `<h2>⏰ ¡SE TE ACABÓ EL TIEMPO!</h2><p>Richard sigue suelto por el parque. Atrapaste ${catches} de 5 veces. ¡Inténtalo otra vez!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  }
   document.getElementById('restartBtn').addEventListener('click', startGame);
 }
 
@@ -751,11 +905,22 @@ function loop(ts) {
     if (timeLeft <= 0) {
       gameState = 'lost';
       showOverlay(false);
+    } else {
+      updateLara(dt);
+      updateScrollAndObstacles(dt);
+      if (gameState === 'playing') updateRichard(dt);
     }
-    updateLara(dt);
-    updateScrollAndObstacles(dt);
-    updateRichard(dt);
     draw();
+  } else if (gameState === 'dead') {
+    carDeathTimer -= dt;
+    if (shakeTimer > 0) shakeTimer -= dt;
+    if (hitFlashTimer > 0) hitFlashTimer = Math.max(0, hitFlashTimer - dt*0.5);
+    draw();
+    if (carDeathTimer <= 0) {
+      gameState = 'lost';
+      hitFlashTimer = 0;
+      showOverlay(false, 'car');
+    }
   } else {
     draw();
   }
