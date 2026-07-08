@@ -170,10 +170,12 @@
     <p>
       Richard corre delante de Lara por el camino del parque.<br><br>
       Desliza el dedo: a los lados para esquivar, hacia arriba para acelerar
-      y hacia abajo para frenar. También puedes usar las flechas.<br><br>
-      Esquiva bancos, arbustos, charcos, otros perros... ¡y los coches, que
-      te pueden atropellar! Cuando Richard se pare a olfatear, acércate y
-      atrápalo. Necesitas 5 capturas antes de que se acabe el tiempo.
+      (¡puedes llegar hasta arriba del todo!) y hacia abajo para frenar o
+      retroceder. También puedes usar las flechas.<br><br>
+      Esquiva bancos, arbustos y otros perros... pero los charcos, los
+      coches y las motos son mortales: ¡como te toquen, se acabó la
+      partida! Cuando Richard se pare junto a un árbol o a olfatear,
+      acércate y atrápalo. Necesitas 5 capturas antes de que se acabe el tiempo.
     </p>
     <button id="startBtn">▶ JUGAR</button>
   </div>
@@ -188,7 +190,7 @@
   <div class="ctrlBtn" id="btnRight">▶</div>
 </div>
 
-<div id="footerNote">Desliza el dedo: lados = esquivar · arriba/abajo = acelerar/frenar · R = reiniciar.</div>
+<div id="footerNote">Lados = esquivar · arriba/abajo = acelerar/retroceder · charcos, coches y motos matan · R = reiniciar.</div>
 
 <script>
 const canvas = document.getElementById('game');
@@ -201,7 +203,10 @@ const PIXEL = 3; // escala base de cada "pixel" de sprite
 const PATH_LEFT = 56;
 const PATH_RIGHT = CW - 56;
 const PATH_W = PATH_RIGHT - PATH_LEFT;
-const LARA_SCREEN_Y = CH * 0.74;
+const LARA_Y_DEFAULT = CH * 0.74;
+const LARA_Y_TOP = 30;       // hasta dónde puede llegar al acelerar a tope
+const LARA_Y_BOTTOM = CH * 0.92; // hasta dónde puede retroceder al frenar a tope
+let laraScreenY = LARA_Y_DEFAULT;
 
 // ---------- PALETAS Y SPRITES (pixel art en texto) ----------
 const laraColors = {
@@ -259,13 +264,31 @@ const LARA_FRAME_WALK2 = LARA_FRAME_STAND.map((row,i)=>{
   return row;
 });
 
+// Mency: otra amiga del parque, reutiliza la silueta de Lara con otro look (sin gafas)
+const mencyColors = {
+  '.': null,
+  'H': '#caa23c',
+  'h': '#e0c065',
+  'S': '#f0c39b',
+  's': '#d9a87a',
+  'G': '#f0c39b',
+  'L': '#f0c39b',
+  'B': '#5a7fb0',
+  'b': '#46638c',
+  'P': '#7a4a2a',
+  'p': '#5c381f',
+  'F': '#161616',
+  'O': '#c97a7a'
+};
+
 const richardColors = {
   '.': null,
   'W': '#f4efe2',
   'w': '#d9d0b8',
   'N': '#1a1a1a',
   'T': '#2f8f8f',
-  'Y': '#e8c84a'
+  'Y': '#e8c84a',
+  'p': '#f0d860'
 };
 
 // perros de otros paseantes (colores distintos para diferenciarlos de Richard)
@@ -273,8 +296,10 @@ const npcDogColorsBrown = { '.': null, 'W': '#9a6a3a', 'w': '#7a4f28', 'N': '#16
 const npcDogColorsBlack = { '.': null, 'W': '#3a3a3a', 'w': '#222222', 'N': '#000000', 'T': '#4a4a8a', 'Y': '#cccccc' };
 const npcPalettes = [npcDogColorsBrown, npcDogColorsBlack];
 
-// colores de coches que pasan por el camino
+// colores de coches, motos y camiones que pasan por el camino
 const carColors = ['#e94560', '#2f7fd0', '#f2b134', '#3aa65c'];
+const motoColors = ['#222222', '#7a1f1f', '#1f3a7a', '#5a5a5a'];
+const truckColors = ['#c0392b', '#2e5c8a', '#5a6268', '#b8860b'];
 
 const RICHARD_FRAME_STAND = [
 "....WWWWWWWW....",
@@ -310,6 +335,12 @@ const RICHARD_FRAME_SNIFF = RICHARD_FRAME_STAND.map((row,i)=>{
   if (i===3) return "..WWWwWWWWWwWWW.";
   if (i===4) return "..WWNWWWWWWNWWW.";
   if (i===5) return "..WWWWWWNWWWWWW.";
+  return row;
+});
+
+const RICHARD_FRAME_PEE = RICHARD_FRAME_STAND.map((row,i)=>{
+  if (i===10) return "...WW.......W...";
+  if (i===11) return "...WW......p....";
   return row;
 });
 
@@ -362,7 +393,7 @@ let obstacles = [];
 function genObstacles() {
   obstacles = [];
   let y = 260;
-  const types = ['bench','bush','puddle','cone','dog','dog','car'];
+  const types = ['bench','bush','puddle','cone','dog','dog','car','car','moto','truck'];
   while (y < WORLD_LENGTH - 150) {
     const t = types[Math.floor(rand(0, types.length))];
     let w = 34;
@@ -371,19 +402,23 @@ function genObstacles() {
     else if (t === 'puddle') w = 56;
     else if (t === 'cone') w = 30;
     else if (t === 'dog') w = 42;
-    else if (t === 'car') w = 50;
+    else if (t === 'car') w = 64;
+    else if (t === 'moto') w = 26;
+    else if (t === 'truck') w = 78;
     const x = rand(PATH_LEFT + w/2 + 6, PATH_RIGHT - w/2 - 6);
     obstacles.push({
       type: t, worldY: y, x, baseX: x, w,
       checked: false,
       palette: npcPalettes[Math.floor(rand(0,npcPalettes.length))],
       carColor: carColors[Math.floor(rand(0,carColors.length))],
+      motoColor: motoColors[Math.floor(rand(0,motoColors.length))],
+      truckColor: truckColors[Math.floor(rand(0,truckColors.length))],
       phase: rand(0, Math.PI*2),
-      amp: t==='car' ? rand(14, 26) : rand(26, 46),
-      freq: t==='car' ? rand(0.0018, 0.0028) : rand(0.0012, 0.0022),
+      amp: t==='truck' ? rand(6,14) : ((t==='car'||t==='moto') ? rand(14, 26) : rand(26, 46)),
+      freq: (t==='car'||t==='moto'||t==='truck') ? rand(0.0018, 0.0028) : rand(0.0012, 0.0022),
       frame: Math.random() < 0.5 ? 1 : 2
     });
-    y += t === 'car' ? rand(190, 300) : rand(150, 260);
+    y += (t === 'car' || t === 'moto' || t === 'truck') ? rand(190, 300) : rand(150, 260);
   }
 }
 
@@ -396,11 +431,7 @@ function drawObstacle(o, sx, sy, scale) {
     ctx.fillRect(sx-w/2+3*scale, sy, 4*scale, h*0.6);
     ctx.fillRect(sx+w/2-7*scale, sy, 4*scale, h*0.6);
   } else if (o.type === 'bush') {
-    const r = o.w*scale*0.5;
-    ctx.fillStyle = '#2f6b3a';
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#3f8a4d';
-    ctx.beginPath(); ctx.arc(sx-r*0.3, sy-r*0.3, r*0.55, 0, Math.PI*2); ctx.fill();
+    drawBush(sx, sy, scale);
   } else if (o.type === 'puddle') {
     const w = o.w*scale, h = 9*scale;
     ctx.fillStyle = '#7fb8d6';
@@ -420,15 +451,41 @@ function drawObstacle(o, sx, sy, scale) {
     ctx.fillRect(sx-w*0.3, sy, w*0.6, 3*scale);
   } else if (o.type === 'car') {
     drawCar(sx, sy, scale, o.carColor);
+  } else if (o.type === 'moto') {
+    drawMoto(sx, sy, scale, o.motoColor);
+  } else if (o.type === 'truck') {
+    drawTruck(sx, sy, scale, o.truckColor);
+  }
+}
+
+function drawBush(sx, sy, scale) {
+  // sombra de contacto
+  ctx.fillStyle = 'rgba(20,20,10,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy+11*scale, 22*scale, 5*scale, 0, 0, Math.PI*2);
+  ctx.fill();
+  // racimo de follaje irregular (claramente un arbusto, no una bola o piedra)
+  const blobs = [
+    { dx:-11, dy: 3, rx:14, ry:10, c:'#2c5f36' },
+    { dx: 9,  dy: 4, rx:13, ry: 9, c:'#316b3c' },
+    { dx:-3,  dy:-6, rx:16, ry:12, c:'#3f8a4d' },
+    { dx: 7,  dy:-5, rx:11, ry: 9, c:'#4d9457' },
+    { dx:-9,  dy:-10, rx:9,  ry: 8, c:'#5aa863' }
+  ];
+  for (const b of blobs) {
+    ctx.fillStyle = b.c;
+    ctx.beginPath();
+    ctx.ellipse(sx+b.dx*scale, sy+b.dy*scale, b.rx*scale, b.ry*scale, 0, 0, Math.PI*2);
+    ctx.fill();
   }
 }
 
 function drawCar(sx, sy, scale, color) {
-  const w = 30*scale, h = 50*scale;
+  const w = 40*scale, h = 64*scale;
   // sombra de contacto
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
   ctx.beginPath();
-  ctx.ellipse(sx, sy+h*0.46, w*0.58, h*0.16, 0, 0, Math.PI*2);
+  ctx.ellipse(sx, sy+h*0.46, w*0.58, h*0.14, 0, 0, Math.PI*2);
   ctx.fill();
   // carrocería
   ctx.fillStyle = color;
@@ -452,15 +509,104 @@ function drawCar(sx, sy, scale, color) {
   ctx.fillRect(sx+w*0.45, sy+h*0.08, w*0.13, h*0.20);
 }
 
+function drawTruck(sx, sy, scale, color) {
+  const w = 46*scale, h = 92*scale;
+  // sombra de contacto
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy+h*0.47, w*0.6, h*0.09, 0, 0, Math.PI*2);
+  ctx.fill();
+  // caja de carga (la parte grande)
+  ctx.fillStyle = color;
+  ctx.fillRect(sx-w/2, sy-h*0.5, w, h*0.72);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(sx-w/2, sy-h*0.5, w, 5*scale);
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(sx-w/2, sy-h*0.5, w*0.18, h*0.72);
+  ctx.fillRect(sx+w/2-w*0.18, sy-h*0.5, w*0.18, h*0.72);
+  // cabina (parte delantera, más pequeña)
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(sx-w*0.42, sy+h*0.22, w*0.84, h*0.28);
+  ctx.fillStyle = '#9fd8f0';
+  ctx.fillRect(sx-w*0.30, sy+h*0.26, w*0.60, h*0.10);
+  // faros
+  ctx.fillStyle = '#fff7c2';
+  ctx.fillRect(sx-w*0.40, sy+h*0.46, w*0.16, h*0.05);
+  ctx.fillRect(sx+w*0.24, sy+h*0.46, w*0.16, h*0.05);
+  // ruedas (varios ejes, es largo)
+  ctx.fillStyle = '#161616';
+  const wheelYs = [sy-h*0.32, sy-h*0.04, sy+h*0.30];
+  for (const wy of wheelYs) {
+    ctx.fillRect(sx-w*0.58, wy, w*0.12, h*0.13);
+    ctx.fillRect(sx+w*0.46, wy, w*0.12, h*0.13);
+  }
+}
+
+function drawMoto(sx, sy, scale, color) {
+  const w = 16*scale, h = 42*scale;
+  // sombra de contacto
+  ctx.fillStyle = 'rgba(0,0,0,0.26)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy+h*0.42, w*1.1, h*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+  // ruedas
+  ctx.fillStyle = '#161616';
+  ctx.beginPath(); ctx.ellipse(sx, sy-h*0.36, w*0.46, w*0.46, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(sx, sy+h*0.36, w*0.46, w*0.46, 0, 0, Math.PI*2); ctx.fill();
+  // chasis
+  ctx.fillStyle = color;
+  ctx.fillRect(sx-w*0.26, sy-h*0.28, w*0.52, h*0.56);
+  // motorista: casco y torso
+  ctx.fillStyle = '#1c1c1c';
+  ctx.beginPath(); ctx.arc(sx, sy-h*0.10, w*0.4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(sx-w*0.3, sy+h*0.0, w*0.6, h*0.3);
+}
+
+// ---------- ÁRBOLES JUNTO AL CAMINO (disparan el "pis" de Richard) ----------
+let trees = [];
+function genTrees() {
+  trees = [];
+  let y = 320;
+  while (y < WORLD_LENGTH - 100) {
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const x = side === 'left' ? rand(14, PATH_LEFT-12) : rand(PATH_RIGHT+12, CW-14);
+    trees.push({ worldY: y, x, side, peeTriggered: false });
+    y += rand(260, 420);
+  }
+}
+
+function drawTree(sx, sy, scale) {
+  const trunkW = 6*scale, trunkH = 14*scale;
+  ctx.fillStyle = 'rgba(20,20,10,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy+trunkH*0.7, 16*scale, 5*scale, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#6b4420';
+  ctx.fillRect(sx-trunkW/2, sy-trunkH*0.1, trunkW, trunkH);
+  // copas en capas (forma de pino, no una bola)
+  drawTreeTier(sx, sy-trunkH*0.05, 26*scale, 20*scale, '#2f6b3a');
+  drawTreeTier(sx, sy-trunkH*0.05-13*scale, 21*scale, 18*scale, '#3a7d46');
+  drawTreeTier(sx, sy-trunkH*0.05-24*scale, 16*scale, 15*scale, '#4d9457');
+}
+function drawTreeTier(cx, cyBottom, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, cyBottom-h);
+  ctx.lineTo(cx-w/2, cyBottom);
+  ctx.lineTo(cx+w/2, cyBottom);
+  ctx.closePath();
+  ctx.fill();
+}
+
 // ---------- ESTADO ----------
-let camY = 0; // distancia recorrida por Lara (mundo)
+let camY = 0; // distancia recorrida por Lara (mundo) — avanza siempre a la misma velocidad
 let staggerTimer = 0; // penalización tras chocar
 let keys = {};
 let pointerActive = false;
 let pointerTargetX = null;
-let pointerStartX = null, pointerStartY = null, laraStartX = null;
-let forwardInput = 0; // -1 (atrás/frenar) .. 1 (adelante/acelerar)
-const MAX_BOOST = 0.16; // unidades de mundo por ms extra al acelerar/frenar (permite ir hacia atrás)
+let pointerTargetY = null;
+let pointerStartX = null, pointerStartY = null, laraStartX = null, laraStartY = null;
 let timeLeft = TOTAL_TIME;
 let catches = 0;
 let gameState = 'menu';
@@ -473,7 +619,10 @@ let hitFlashTimer = 0;
 let shakeTimer = 0;
 let elapsed = 0;
 let carDeathTimer = 0;
+let deathReason = 'car';
 const CAR_DEATH_DURATION = 900;
+let endingTimer = 0;
+const ENDING_DURATION = 2400;
 
 const lara = {
   x: CW/2, w: 17*PIXEL, speed: 0.34,
@@ -488,11 +637,12 @@ const richard = {
 
 function resetGame() {
   camY = 0; timeLeft = TOTAL_TIME; catches = 0; staggerTimer = 0;
-  lara.x = CW/2; lara.frame = 0; lara.animTimer = 0;
+  lara.x = CW/2; lara.frame = 0; lara.animTimer = 0; laraScreenY = LARA_Y_DEFAULT;
   richard.worldY = 230; richard.x = CW/2; richard.state = 'run';
   richard.stateTimer = rand(900,1800); richard.caughtCooldown = 0; richard.vx = rand(-0.05,0.05);
-  glassesOffTimer = 0; screenFlashTimer = 0; hitFlashTimer = 0; shakeTimer = 0; elapsed = 0; forwardInput = 0; carDeathTimer = 0;
+  glassesOffTimer = 0; screenFlashTimer = 0; hitFlashTimer = 0; shakeTimer = 0; elapsed = 0; carDeathTimer = 0;
   genObstacles();
+  genTrees();
   document.getElementById('catches').textContent = `🐾 0 / 5`;
   document.getElementById('timer').textContent = `⏱ ${TOTAL_TIME}`;
   document.getElementById('gapBar').style.width = '30%';
@@ -523,20 +673,21 @@ function onPointerDown(clientX, clientY) {
   pointerStartX = canvasXFromClientX(clientX);
   pointerStartY = canvasYFromClientY(clientY);
   laraStartX = lara.x;
+  laraStartY = laraScreenY;
   pointerTargetX = lara.x;
+  pointerTargetY = laraScreenY;
 }
 function onPointerMove(clientX, clientY) {
   if (!pointerActive) return;
   const curX = canvasXFromClientX(clientX);
   const curY = canvasYFromClientY(clientY);
   pointerTargetX = laraStartX + (curX - pointerStartX);
-  const dy = pointerStartY - curY; // arrastrar hacia arriba = acelerar
-  forwardInput = Math.max(-1, Math.min(1, dy / 90));
+  pointerTargetY = laraStartY + (curY - pointerStartY);
 }
 function onPointerUp() {
   pointerActive = false;
   pointerTargetX = null;
-  forwardInput = 0;
+  pointerTargetY = null;
 }
 
 canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
@@ -577,18 +728,19 @@ function updateLara(dt) {
     const dx = pointerTargetX - lara.x;
     lara.x += dx * Math.min(1, 0.22 * (dt/16) * turnMul);
     if (Math.abs(dx) > 2) { lara.facing = dx > 0 ? 1 : -1; moving = true; }
+
+    const dy = pointerTargetY - laraScreenY;
+    laraScreenY += dy * Math.min(1, 0.22 * (dt/16) * turnMul);
   } else {
     if (keys['arrowleft'] || keys['a']) { lara.x -= lara.speed*turnMul*dt; lara.facing=-1; moving=true; }
     if (keys['arrowright'] || keys['d']) { lara.x += lara.speed*turnMul*dt; lara.facing=1; moving=true; }
-
-    let kf = 0;
-    if (keys['arrowup'] || keys['w']) kf += 1;
-    if (keys['arrowdown'] || keys['s']) kf -= 1;
-    forwardInput = kf;
+    if (keys['arrowup'] || keys['w']) { laraScreenY -= lara.speed*turnMul*dt; moving=true; }
+    if (keys['arrowdown'] || keys['s']) { laraScreenY += lara.speed*turnMul*dt; moving=true; }
   }
 
   const halfW = lara.w/2;
   lara.x = Math.max(PATH_LEFT + halfW*0.4, Math.min(PATH_RIGHT - halfW*0.4, lara.x));
+  laraScreenY = Math.max(LARA_Y_TOP, Math.min(LARA_Y_BOTTOM, laraScreenY));
 
   if (moving) {
     lara.animTimer += dt;
@@ -609,12 +761,13 @@ function triggerHit() {
   hitFlashTimer = 220;
 }
 
-function triggerCarHit() {
+function triggerDeath(reason) {
   if (gameState !== 'playing') return;
   gameState = 'dead';
   carDeathTimer = CAR_DEATH_DURATION;
   hitFlashTimer = CAR_DEATH_DURATION;
   shakeTimer = 500;
+  deathReason = reason;
 }
 
 function updateScrollAndObstacles(dt) {
@@ -623,24 +776,28 @@ function updateScrollAndObstacles(dt) {
     staggerTimer -= dt;
     speedMul = 0.12;
   }
-  const boosted = SCROLL_SPEED + forwardInput * MAX_BOOST;
-  camY = Math.max(0, camY + boosted * speedMul * dt);
+  camY = Math.max(0, camY + SCROLL_SPEED * speedMul * dt);
 
   const larHalf = lara.w * 0.34;
   for (const o of obstacles) {
-    const sy = LARA_SCREEN_Y - (o.worldY - camY);
-    if (o.type === 'dog' || o.type === 'car') {
+    const sy = laraScreenY - (o.worldY - camY);
+    if (o.type === 'dog' || o.type === 'car' || o.type === 'moto' || o.type === 'truck') {
       o.x = Math.max(PATH_LEFT+30, Math.min(PATH_RIGHT-30, o.baseX + Math.sin(elapsed*o.freq + o.phase) * o.amp));
     }
     if (!o.checked && camY >= o.worldY - 4) {
       o.checked = true;
       const oHalf = o.w/2;
-      const overlapX = Math.abs(o.x - lara.x) < (larHalf + oHalf*0.62);
+      const hitFactor = o.type === 'puddle' ? 0.48 : (o.type === 'moto' ? 0.55 : 0.62);
+      const overlapX = Math.abs(o.x - lara.x) < (larHalf + oHalf*hitFactor);
       if (overlapX) {
         if (o.type === 'puddle') {
-          staggerTimer = Math.max(staggerTimer, 280);
+          triggerDeath('puddle');
         } else if (o.type === 'car') {
-          triggerCarHit();
+          triggerDeath('car');
+        } else if (o.type === 'moto') {
+          triggerDeath('moto');
+        } else if (o.type === 'truck') {
+          triggerDeath('truck');
         } else {
           triggerHit();
         }
@@ -656,13 +813,25 @@ function updateRichard(dt) {
   let speedFactor;
   if (richard.state === 'run') speedFactor = 0.80 + Math.min(0.18, catches*0.03);
   else if (richard.state === 'sniff') speedFactor = 0.05;
+  else if (richard.state === 'pee') speedFactor = 0.02;
   else speedFactor = 1.85; // sprint
 
   richard.worldY += SCROLL_SPEED * speedFactor * dt;
 
+  // ¿hay un árbol justo a su altura? se para a hacer pipí un segundo
+  for (const t of trees) {
+    if (!t.peeTriggered && richard.worldY >= t.worldY - 6) {
+      t.peeTriggered = true;
+      if (richard.state === 'run' || richard.state === 'sprint') {
+        richard.state = 'pee';
+        richard.stateTimer = 1000; // solo un segundo
+      }
+    }
+  }
+
   if (richard.stateTimer <= 0) {
     const r = Math.random();
-    if (richard.state === 'sniff') { richard.state='run'; richard.stateTimer = rand(700,1500); }
+    if (richard.state === 'sniff' || richard.state === 'pee') { richard.state='run'; richard.stateTimer = rand(700,1500); }
     else if (r < 0.32) { richard.state = 'sniff'; richard.stateTimer = rand(500,1100); }
     else if (r < 0.55) { richard.state = 'sprint'; richard.stateTimer = rand(450,800); }
     else { richard.state = 'run'; richard.stateTimer = rand(700,1600); }
@@ -671,7 +840,7 @@ function updateRichard(dt) {
   richard.x += Math.sin(elapsed*0.0016 + 1.4) * 0.06 * dt;
   richard.x = Math.max(PATH_LEFT+30, Math.min(PATH_RIGHT-30, richard.x));
 
-  if (richard.state !== 'sniff') {
+  if (richard.state !== 'sniff' && richard.state !== 'pee') {
     richard.animTimer += dt;
     if (richard.animTimer > 100) { richard.animTimer = 0; richard.frame = richard.frame===1?2:1; }
   }
@@ -684,15 +853,16 @@ function updateRichard(dt) {
   if (richard.caughtCooldown <= 0 && gap < 20 && Math.abs(richard.x - lara.x) < (lara.w*0.34 + richard.w*0.34)) {
     catches++;
     document.getElementById('catches').textContent = `🐾 ${catches} / 5`;
-    richard.caughtCooldown = 1000;
-    richard.worldY = camY + rand(210, 280);
-    richard.state = 'sprint';
-    richard.stateTimer = 500;
-    screenFlashTimer = screenFlashDuration;
-    screenFlashColor = `hsl(${Math.floor(rand(0,360))}, 95%, 60%)`;
     if (catches >= 5) {
-      gameState = 'won';
-      showOverlay(true);
+      gameState = 'ending';
+      endingTimer = ENDING_DURATION;
+    } else {
+      richard.caughtCooldown = 1000;
+      richard.worldY = camY + rand(210, 280);
+      richard.state = 'sprint';
+      richard.stateTimer = 500;
+      screenFlashTimer = screenFlashDuration;
+      screenFlashColor = `hsl(${Math.floor(rand(0,360))}, 95%, 60%)`;
     }
   }
 }
@@ -727,14 +897,6 @@ function drawBackground() {
   const dashOffset = (camY*1.2) % 40;
   for (let y = -dashOffset; y < CH; y += 40) {
     ctx.fillRect(CW/2-2, y, 4, 20);
-  }
-
-  // árboles decorativos en el césped (parallax)
-  ctx.fillStyle = '#2f6b3a';
-  const treeOffset = (camY*0.6) % 130;
-  for (let y = -treeOffset; y < CH; y += 130) {
-    ctx.beginPath(); ctx.arc(22, y+20, 14, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(CW-22, y+85, 14, 0, Math.PI*2); ctx.fill();
   }
 }
 
@@ -777,9 +939,70 @@ function drawDeathCross(cx, cy, progress) {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('¡ATROPELLADA!', cx, cy - 46);
+    ctx.fillText(deathReason === 'puddle' ? '¡RESBALÓ!' : '¡ATROPELLADA!', cx, cy - 46);
     ctx.font = '16px monospace';
-    ctx.fillText('💥', cx, cy + 50);
+    ctx.fillText(deathReason === 'puddle' ? '💦' : '💥', cx, cy + 50);
+    ctx.restore();
+    ctx.textAlign = 'left';
+  }
+}
+
+function drawEnding(progress) {
+  // plaza de piedra
+  ctx.fillStyle = '#cdbfa0';
+  ctx.fillRect(0,0,CW,CH);
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 2;
+  for (let yy=0; yy<CH; yy+=34) { ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(CW,yy); ctx.stroke(); }
+  for (let xx=0; xx<CW; xx+=34) { ctx.beginPath(); ctx.moveTo(xx,0); ctx.lineTo(xx,CH); ctx.stroke(); }
+
+  // fuente decorativa
+  ctx.fillStyle = '#8fa9bf';
+  ctx.beginPath(); ctx.ellipse(CW/2, CH*0.22, 46, 18, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#aac4d8';
+  ctx.beginPath(); ctx.ellipse(CW/2, CH*0.20, 13, 13, 0, 0, Math.PI*2); ctx.fill();
+
+  // farolas decorativas
+  ctx.fillStyle = '#5a4a3a';
+  ctx.fillRect(28, CH*0.32, 4, 70);
+  ctx.fillRect(CW-32, CH*0.32, 4, 70);
+  ctx.fillStyle = '#ffe39a';
+  ctx.beginPath(); ctx.arc(30, CH*0.32, 7, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(CW-30, CH*0.32, 7, 0, Math.PI*2); ctx.fill();
+
+  const t = Math.min(1, progress*1.4);
+
+  // Mency esperando
+  const mencyX = CW/2, mencyY = CH*0.4;
+  ctx.fillStyle = 'rgba(20,20,10,0.25)';
+  ctx.beginPath(); ctx.ellipse(mencyX, mencyY+30, 18, 6, 0,0,Math.PI*2); ctx.fill();
+  drawSprite(LARA_FRAME_STAND, mencyColors, mencyX-25.5, mencyY-30, PIXEL, false, '#1a1410');
+
+  // Lara camina desde abajo hacia Mency, con Richard a su lado
+  const startY = CH*0.92, endY = CH*0.56;
+  const ly = startY + (endY-startY)*t;
+  const lx = CW/2 - 18;
+  ctx.fillStyle = 'rgba(20,20,10,0.25)';
+  ctx.beginPath(); ctx.ellipse(lx, ly+34, 16, 6, 0,0,Math.PI*2); ctx.fill();
+  const lFrame = (Math.floor(progress*9)%2===0) ? LARA_FRAME_WALK1 : LARA_FRAME_WALK2;
+  drawSprite(lFrame, laraColors, lx-25.5, ly-30, PIXEL, false, '#1a1410');
+
+  // Richard, llevado junto a Lara
+  const rx = lx + 36, ry = ly + 6;
+  const rFrame = richard.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1;
+  ctx.fillStyle = 'rgba(20,20,10,0.25)';
+  ctx.beginPath(); ctx.ellipse(rx, ry+18, 14, 5, 0,0,Math.PI*2); ctx.fill();
+  drawSprite(rFrame, richardColors, rx-25.5*0.85, ry-18, PIXEL*0.85, false, '#1f2a2a');
+
+  if (progress > 0.65) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (progress-0.65)*3);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('¡Lara le entrega Richard a Mency!', CW/2, CH*0.84);
+    ctx.font = '20px monospace';
+    ctx.fillText('🐾💕', CW/2, CH*0.90);
     ctx.restore();
     ctx.textAlign = 'left';
   }
@@ -793,15 +1016,17 @@ function draw() {
 
   drawBackground();
 
-  // obstáculos y perros NPC (ordenados para que lo más cercano se dibuje encima)
-  const visible = obstacles
-    .map(o => ({ o, sy: LARA_SCREEN_Y - (o.worldY - camY) }))
+  // árboles, obstáculos y perros NPC (ordenados para que lo más cercano se dibuje encima)
+  const visible = obstacles.map(o => ({ o, sy: laraScreenY - (o.worldY - camY) }))
+    .concat(trees.map(t => ({ o: t, sy: laraScreenY - (t.worldY - camY), isTree: true })))
     .filter(v => v.sy > -50 && v.sy < CH+50)
     .sort((a,b)=>a.sy-b.sy);
 
-  for (const { o, sy } of visible) {
+  for (const { o, sy, isTree } of visible) {
     const scale = depthScale(sy);
-    if (o.type === 'dog') {
+    if (isTree) {
+      drawTree(o.x, sy, scale);
+    } else if (o.type === 'dog') {
       const frame = o.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1;
       const sc = PIXEL*scale*0.85;
       const fw = frame[0].length*sc, fh = frame.length*sc;
@@ -816,10 +1041,10 @@ function draw() {
   }
 
   // Richard
-  const richardSy = LARA_SCREEN_Y - (richard.worldY - camY);
+  const richardSy = laraScreenY - (richard.worldY - camY);
   if (richardSy > -60 && richardSy < CH+60) {
     const scale = depthScale(richardSy);
-    let rFrame = richard.state === 'sniff' ? RICHARD_FRAME_SNIFF : (richard.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1);
+    let rFrame = richard.state === 'sniff' ? RICHARD_FRAME_SNIFF : (richard.state === 'pee' ? RICHARD_FRAME_PEE : (richard.frame===2 ? RICHARD_FRAME_RUN2 : RICHARD_FRAME_RUN1));
     const sc = PIXEL*scale;
     const fw = rFrame[0].length*sc, fh = rFrame.length*sc;
     ctx.fillStyle = 'rgba(20,30,20,0.35)';
@@ -832,15 +1057,15 @@ function draw() {
   // Lara (siempre en primer plano, posición fija) — o la cruz si la atropellaron
   if (gameState === 'dead') {
     const progress = 1 - Math.max(0, carDeathTimer) / CAR_DEATH_DURATION;
-    drawDeathCross(lara.x, LARA_SCREEN_Y, progress);
+    drawDeathCross(lara.x, laraScreenY, progress);
   } else {
     let lFrame = lara.frame===1 ? LARA_FRAME_WALK1 : (lara.frame===2 ? LARA_FRAME_WALK2 : LARA_FRAME_STAND);
     const lw = lFrame[0].length*PIXEL, lh = lFrame.length*PIXEL;
     ctx.fillStyle = 'rgba(20,30,20,0.35)';
     ctx.beginPath();
-    ctx.ellipse(lara.x, LARA_SCREEN_Y+lh*0.46, lw*0.36, 6, 0, 0, Math.PI*2);
+    ctx.ellipse(lara.x, laraScreenY+lh*0.46, lw*0.36, 6, 0, 0, Math.PI*2);
     ctx.fill();
-    drawSprite(lFrame, laraColors, lara.x-lw/2, LARA_SCREEN_Y-lh/2, PIXEL, lara.facing===-1, '#1a1410');
+    drawSprite(lFrame, laraColors, lara.x-lw/2, laraScreenY-lh/2, PIXEL, lara.facing===-1, '#1a1410');
   }
 
   // efecto: golpe / tropiezo
@@ -862,7 +1087,7 @@ function draw() {
     ctx.fillStyle = '#000';
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('¡se le cayeron las gafas a Lara!', CW/2, LARA_SCREEN_Y-40);
+    ctx.fillText('¡se le cayeron las gafas a Lara!', CW/2, laraScreenY-40);
     ctx.textAlign = 'left';
   }
 
@@ -884,11 +1109,17 @@ function showOverlay(won, reason) {
   const ov = document.getElementById('overlay');
   ov.style.display = 'flex';
   if (won) {
-    ov.innerHTML = `<h2>🎉 ¡LARA ATRAPÓ A RICHARD!</h2><p>Lo lograste en ${TOTAL_TIME-Math.ceil(timeLeft)} segundos. Richard mueve la cola, ¡misión cumplida!</p><button id="restartBtn">▶ JUGAR DE NUEVO</button>`;
+    ov.innerHTML = `<h2>🎉 ¡LARA LE ENTREGÓ RICHARD A MENCY!</h2><p>Lo lograste en ${TOTAL_TIME-Math.ceil(timeLeft)} segundos. Llegaron juntos a la plaza y Mency se puso feliz al ver a Richard sano y salvo. ¡Misión cumplida!</p><button id="restartBtn">▶ JUGAR DE NUEVO</button>`;
   } else if (reason === 'car') {
     ov.innerHTML = `<h2>✝️ ¡UN COCHE ATROPELLÓ A LARA!</h2><p>No esquivó a tiempo... Atrapó a Richard ${catches} de 5 veces. ¡Inténtalo otra vez y ten cuidado con el tráfico!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  } else if (reason === 'moto') {
+    ov.innerHTML = `<h2>✝️ ¡UNA MOTO ATROPELLÓ A LARA!</h2><p>No la vio venir a tiempo... Atrapó a Richard ${catches} de 5 veces. ¡Inténtalo otra vez y ten cuidado con el tráfico!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  } else if (reason === 'truck') {
+    ov.innerHTML = `<h2>✝️ ¡UN CAMIÓN ATROPELLÓ A LARA!</h2><p>Era demasiado grande para esquivarlo a tiempo... Atrapó a Richard ${catches} de 5 veces. ¡Inténtalo otra vez y ten cuidado con el tráfico!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+  } else if (reason === 'puddle') {
+    ov.innerHTML = `<h2>✝️ ¡LARA RESBALÓ EN UN CHARCO!</h2><p>Se cayó de mala manera... Atrapó a Richard ${catches} de 5 veces. ¡Inténtalo otra vez y esquiva los charcos!</p><button id="restartBtn">▶ REINTENTAR</button>`;
   } else {
-    ov.innerHTML = `<h2>⏰ ¡SE TE ACABÓ EL TIEMPO!</h2><p>Richard sigue suelto por el parque. Atrapaste ${catches} de 5 veces. ¡Inténtalo otra vez!</p><button id="restartBtn">▶ REINTENTAR</button>`;
+    ov.innerHTML = `<h2>⏰ ¡SE TE ACABÓ EL TIEMPO!</h2><p>Richard sigue corriendo suelto por el parque. Mency se ha quedado esperando en la plaza sin saber qué ha pasado... Atrapaste a Richard ${catches} de 5 veces. ¡Inténtalo otra vez!</p><button id="restartBtn">▶ REINTENTAR</button>`;
   }
   document.getElementById('restartBtn').addEventListener('click', startGame);
 }
@@ -910,7 +1141,9 @@ function loop(ts) {
       updateScrollAndObstacles(dt);
       if (gameState === 'playing') updateRichard(dt);
     }
-    draw();
+    if (gameState === 'playing') draw();
+    else if (gameState === 'ending') drawEnding(0);
+    else draw();
   } else if (gameState === 'dead') {
     carDeathTimer -= dt;
     if (shakeTimer > 0) shakeTimer -= dt;
@@ -919,8 +1152,17 @@ function loop(ts) {
     if (carDeathTimer <= 0) {
       gameState = 'lost';
       hitFlashTimer = 0;
-      showOverlay(false, 'car');
+      showOverlay(false, deathReason);
     }
+  } else if (gameState === 'ending') {
+    endingTimer -= dt;
+    drawEnding(1 - Math.max(0, endingTimer) / ENDING_DURATION);
+    if (endingTimer <= 0) {
+      gameState = 'won';
+      showOverlay(true);
+    }
+  } else if (gameState === 'won') {
+    drawEnding(1);
   } else {
     draw();
   }
@@ -929,6 +1171,7 @@ function loop(ts) {
 }
 
 genObstacles();
+genTrees();
 draw();
 requestAnimationFrame(loop);
 </script>
